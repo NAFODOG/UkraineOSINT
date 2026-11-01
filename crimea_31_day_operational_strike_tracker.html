@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crimea 31-Day Operational Strike & Event Tracker (October 2026)</title>
+    <!-- Tailwind CSS for modern responsive UI overlay -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet CSS & JS for Satellite Base Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Glassmorphic UI Panels */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5);
+            border-radius: 4px;
+        }
+
+        /* Leaflet & Map Container Positioning */
+        #map-container {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: #0b0f12;
+        }
+
+        /* Leaflet City Pin Custom Tooltip Styling */
+        .city-leaflet-label {
+            background: rgba(15, 23, 42, 0.9) !important;
+            border: 1px solid rgba(59, 130, 246, 0.4) !important;
+            color: #f1f5f9 !important;
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 10px !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.05em !important;
+            padding: 2px 6px !important;
+            border-radius: 6px !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .city-leaflet-label::before {
+            display: none !important;
+        }
+
+        /* Animated Event Pulsing Circles */
+        @keyframes pulse-ring {
+            0% { r: 12px; opacity: 0.9; stroke-width: 3px; }
+            50% { r: 35px; opacity: 0.5; stroke-width: 2px; }
+            100% { r: 50px; opacity: 0; stroke-width: 1px; }
+        }
+
+        .animated-strike-ring {
+            animation: pulse-ring 2s infinite ease-out;
+            transform-origin: center;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen overflow-hidden bg-slate-950 text-slate-100">
+
+    <!-- Leaflet Satellite Base Map Container -->
+    <div id="map-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div class="relative z-20 flex flex-col h-full justify-between pointer-events-none p-4 md:p-6">
+        
+        <!-- Top Navigation Bar -->
+        <header class="flex justify-between items-start pointer-events-auto">
+            <div class="glass-panel p-4 rounded-xl shadow-2xl max-w-lg border-l-4 border-blue-500">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                    <h1 class="text-lg md:text-xl font-bold tracking-tight text-white uppercase font-mono">
+                        Crimea Satellite Strike Tracker
+                    </h1>
+                </div>
+                <p class="text-xs text-slate-400 font-mono">
+                    31-Day Kinetic & Infrastructure Intelligence Layer
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2 text-xs">
+                    <span class="px-2 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/50">
+                        Source: @Crimeanwind
+                    </span>
+                    <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                        Oct 1 – Oct 31, 2026
+                    </span>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="hidden lg:flex gap-3 glass-panel p-3 rounded-xl pointer-events-auto">
+                <div class="text-center px-3 border-r border-slate-700">
+                    <div class="text-xs text-slate-400 font-mono">Strikes / Targets</div>
+                    <div class="text-lg font-bold text-red-400 font-mono" id="stat-strikes">58</div>
+                </div>
+                <div class="text-center px-3 border-r border-slate-700">
+                    <div class="text-xs text-slate-400 font-mono">Grid Outages</div>
+                    <div class="text-lg font-bold text-amber-400 font-mono" id="stat-blackouts">12 Districts</div>
+                </div>
+                <div class="text-center px-3">
+                    <div class="text-xs text-slate-400 font-mono">AA / Radar Engagements</div>
+                    <div class="text-lg font-bold text-cyan-400 font-mono" id="stat-aa">64 Operations</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sidebar / Event Detail Drawer -->
+        <div id="event-drawer" class="absolute top-24 right-4 md:right-6 w-80 md:w-96 max-h-[calc(100vh-210px)] glass-panel rounded-xl p-4 overflow-y-auto pointer-events-auto transition-all duration-300 transform translate-x-0">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-700 mb-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-red-400"></i>
+                    <h2 class="font-semibold text-sm uppercase font-mono tracking-wider text-slate-200" id="drawer-date-title">
+                        Oct 25, 2026
+                    </h2>
+                </div>
+                <span id="drawer-event-count" class="text-xs font-mono px-2 py-0.5 bg-red-950 text-red-300 rounded border border-red-800">
+                    3 Events Recorded
+                </span>
+            </div>
+
+            <!-- Dynamic Event Feed Container -->
+            <div id="event-feed-list" class="space-y-3">
+                <!-- Dynamically populated by JS -->
+            </div>
+        </div>
+
+        <!-- Bottom Controls & Timeline -->
+        <footer class="pointer-events-auto glass-panel p-4 rounded-xl max-w-4xl mx-auto w-full shadow-2xl border-t-2 border-blue-500/50">
+            
+            <!-- Playback Control Header -->
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-3">
+                <div class="flex items-center gap-2">
+                    <button id="btn-play" class="p-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg active:scale-95 flex items-center gap-1.5 font-mono text-xs font-bold">
+                        <i data-lucide="play" id="play-icon" class="w-4 h-4"></i>
+                        <span id="play-text">PLAY ANIMATION</span>
+                    </button>
+                    <button id="btn-reset" class="p-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700 text-xs font-mono">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Selected Day Display -->
+            <div class="text-center">
+                <div class="text-xs font-mono text-slate-400">OCTOBER TIMELINE SELECTOR</div>
+                <div class="text-base font-bold text-blue-400 font-mono" id="timeline-date-label">
+                    DAY 1: OCT 01, 2026
+                </div>
+            </div>
+
+            <!-- Map Legend -->
+            <div class="hidden sm:flex items-center gap-4 text-xs font-mono">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-red-500 inline-block shadow-sm shadow-red-500"></span>
+                        <span class="text-slate-300">Kinetic Strike</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                        <span class="text-slate-300">Substation / Blackout</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span>
+                        <span class="text-slate-300">Radar / AA Ops</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline Day Selector Buttons -->
+            <div class="flex gap-2 overflow-x-auto pt-2 border-t border-slate-800 pb-1" id="day-buttons-container">
+                <!-- 31 Day Buttons generated by JavaScript -->
+            </div>
+        </footer>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // --- 31-DAY OPERATIONAL REPORT DATA (OCT 1 - OCT 31, 2026) ---
+        const STRIKE_DATA = [
+            { day: 1, date: "Oct 01, 2026", title: "Monthly Reconnaissance & Coastal AA Probing", summary: "Early morning UAV sweeps detected engaging western radar outposts near Cape Tarhankut.", events: [
+                { type: "aa", title: "Tarhankut Radar Defense", location: "Cape Tarhankut", lat: 45.3450, lng: 32.5200, desc: "S-400 / Pantsir-S1 units active engaging high-altitude surveillance drones." },
+                { type: "aa", title: "Sevastopol Harbor Smoke Screens", location: "Sevastopol", lat: 44.6166, lng: 33.5254, desc: "Aerosol screens deployed across South Bay piers during drone warning." }
+            ]},
+            { day: 2, date: "Oct 02, 2026", title: "Dzhankoi Logistics Hub Interdiction", summary: "Long-range strike vectors aimed at key northern Crimean rail junctions.", events: [
+                { type: "strike", title: "Rail Junction Depot Hit", location: "Dzhankoi Railway Hub", lat: 45.7090, lng: 34.3930, desc: "Freight staging lines sustained minor damage; emergency repair crews deployed." }
+            ]},
+            { day: 3, date: "Oct 03, 2026", title: "Feodosia Fuel Depot Warning", summary: "Maritime drone activity logged off the eastern coast near marine oil terminal piers.", events: [
+                { type: "aa", title: "Feodosia Harbor Patrol Patrols", location: "Feodosia Outer Bay", lat: 45.0319, lng: 35.3824, desc: "Heavy machine-gun sweeps and Mi-8 helicopter sorties against USV vectors." }
+            ]},
+            { day: 4, date: "Oct 04, 2026", title: "Western Airfield Alert", summary: "Airfield alerts triggered at Saky and Belbek following incoming low-observable drone signals.", events: [
+                { type: "aa", title: "Saky Airbase AA Engagements", location: "Saky Airfield", lat: 45.1333, lng: 33.6000, desc: "Multiple surface-to-air missile launches logged near Novofedorivka." }
+            ]},
+            { day: 5, date: "Oct 05, 2026", title: "Simferopol Substation Tripping", summary: "Secondary electrical sub-stations trip near the capital, starting regional load shedding.", events: [
+                { type: "grid", title: "Central Feeder Trip", location: "Simferopol Outer Grid", lat: 44.9521, lng: 34.1024, desc: "Overload on 330kV lines causes temporary blackouts in suburban sectors." }
+            ]},
+            { day: 6, date: "Oct 06, 2026", title: "Kerch Bridge Electronic Jamming", summary: "High-intensity GPS spoofing and EW operations activated around the Kerch Strait corridor.", events: [
+                { type: "aa", title: "Kerch EW Umbrella Active", location: "Kerch Strait", lat: 45.3561, lng: 36.4673, desc: "Commercial navigation signals blocked across eastern approaches." }
+            ]},
+            { day: 7, date: "Oct 07, 2026", title: "Yevpatoria Coastal Drone Sorties", summary: "Coastal radar batteries log incoming low-altitude unmanned aircraft.", events: [
+                { type: "strike", title: "Coastal Communication Antenna Hit", location: "Yevpatoria Coast", lat: 45.1904, lng: 33.3669, desc: "Military array damaged on western shoreline." },
+                { type: "aa", title: "ZSU-23-4 Anti-Air Bursts", location: "Yevpatoria sector", lat: 45.2000, lng: 33.4000, desc: "Tracers observed over salt-lake shorelines." }
+            ]},
+            { day: 8, date: "Oct 08, 2026", title: "Bakhchysarai Transformer Strain", summary: "Transformer infrastructure in central Crimea experiences forced emergency shutdown.", events: [
+                { type: "grid", title: "Bakhchysarai Grid Rationing", location: "Bakhchysarai", lat: 44.7500, lng: 33.8600, desc: "Industrial clients shifted off main lines to preserve domestic supply." }
+            ]},
+            { day: 9, date: "Oct 09, 2026", title: "Belbek Airbase Defense Surge", summary: "Intercept operations reported north of Sevastopol near Belbek airfield perimeter.", events: [
+                { type: "aa", title: "Belbek Perimeter Defense", location: "Belbek Sector", lat: 44.6850, lng: 33.5600, desc: "Intercept missiles destroyed two airborne targets over open water." }
+            ]},
+            { day: 10, date: "Oct 10, 2026", title: "Krasnoperekopsk Chemical Logistics Guard", summary: "Northern industrial transport routes placed under elevated alert status.", events: [
+                { type: "aa", title: "Northern Corridor EW Patrols", location: "Krasnoperekopsk", lat: 45.9530, lng: 33.7930, desc: "Mobile radar vehicles stationed along rail freight routes." }
+            ]},
+            { day: 11, date: "Oct 11, 2026", title: "Nyzhnohirskyi Supply Line Interdiction", summary: "Drone strike targeting electrical nodes servicing eastern Crimea's freight lines.", events: [
+                { type: "strike", title: "Nyzhnohirskyi Rail Substation Hit", location: "Nyzhnohirskyi", lat: 45.4450, lng: 34.7300, desc: "Transformer bank damaged; power cut across central rail switches." }
+            ]},
+            { day: 12, date: "Oct 12, 2026", title: "Sevastopol Fleet Pier Smoke Protocol", summary: "Naval forces execute defensive smoke camouflage across marine installations.", events: [
+                { type: "aa", title: "Kilen-Buhhta Smoke Shield", location: "Sevastopol Bay", lat: 44.6200, lng: 33.5500, desc: "Thermal aerosol generators operated continuously for 4 hours." }
+            ]},
+            { day: 13, date: "Oct 13, 2026", title: "Southern Coast Grid Fluctuations", summary: "Yalta and southern resort towns encounter unscheduled 6-hour power outages.", events: [
+                { type: "grid", title: "Yalta Sub-grid De-energization", location: "Yalta", lat: 44.4952, lng: 34.1663, desc: "Emergency maintenance forced by high-voltage line overheating." }
+            ]},
+            { day: 14, date: "Oct 14, 2026", title: "Cape Chersonese AA Engagements", summary: "Sevastopol's western tip experiences active missile and gun defense against sea drones.", events: [
+                { type: "aa", title: "Cape Chersonese AA Batteries", location: "Chersonese Lighthouse", lat: 44.5800, lng: 33.3800, desc: "Coastal guns engage surface craft targets." }
+            ]},
+            { day: 15, date: "Oct 15, 2026", title: "Mid-Month Infrastructure Assessment", summary: "Utilities institute unified peninsula-wide 4-shift rolling blackout schedule.", events: [
+                { type: "grid", title: "Peninsula-Wide Load Shedding", location: "Crimea-Wide", lat: 45.1000, lng: 34.3000, desc: "All 10 major municipal sectors assigned strict 4-hour electricity windows." }
+            ]},
+            { day: 16, date: "Oct 16, 2026", title: "Dzhankoi Northern Rail Escorts", summary: "Diesel locomotive retrofits deployed to bypass un-energized electric track spans.", events: [
+                { type: "strike", title: "Diesel Transport Convoy Transition", location: "Dzhankoi Corridor", lat: 45.7000, lng: 34.4000, desc: "Heavy freight compositions switched over to emergency diesel power." }
+            ]},
+            { day: 17, date: "Oct 17, 2026", title: "Chornomorske Radar Station Attack", summary: "Precision strikes hit early-warning radar installations on the northwestern cape.", events: [
+                { type: "strike", title: "Tarhankut Radar Node Impact", location: "Chornomorske", lat: 45.5000, lng: 32.7000, desc: "Radar dome structure hit by long-range kamikaze drone vector." },
+                { type: "aa", title: "Interception Missiles Salvo", location: "Western Sector", lat: 45.4500, lng: 32.6000, desc: "Pantsir units launch 4 interceptors." }
+            ]},
+            { day: 18, date: "Oct 18, 2026", title: "Feodosia Terminal Defense Alert", summary: "Increased vigilance and naval boat patrols around central fuel storage facilities.", events: [
+                { type: "aa", title: "Oil Pier Perimeter Guards", location: "Feodosia Port", lat: 45.0250, lng: 35.3900, desc: "Raptor-class speedboats deploy boom barriers around oil tankers." }
+            ]},
+            { day: 19, date: "Oct 19, 2026", title: "Central Crimea Substation Surge", summary: "Secondary transformer failures cause widespread dark sectors in central farming regions.", events: [
+                { type: "grid", title: "Agricultural Grid Shutdown", location: "Central District", lat: 45.2200, lng: 34.1500, desc: "Substation de-energized to repair thermal line expansion." }
+            ]},
+            { day: 20, date: "Oct 20, 2026", title: "Saky Airbase Perimeter Security Sweep", summary: "EW forces jam low-frequency remote control signals surrounding the Novofedorivka base.", events: [
+                { type: "aa", title: "Novofedorivka EW Jamming", location: "Saky Airfield", lat: 45.1333, lng: 33.6000, desc: "Broadband signal disruption logged by local civilian monitors." }
+            ]},
+            { day: 21, date: "Oct 21, 2026", title: "Kerch Transit Line Inspections", summary: "Bridge approach inspection protocols tightened following drone reconnaissance sightings.", events: [
+                { type: "aa", title: "Strait Airborne Patrols", location: "Kerch Strait", lat: 45.3561, lng: 36.4673, desc: "Ka-27 helicopters conduct continuous surface scanning." }
+            ]},
+            { day: 22, date: "Oct 22, 2026", title: "Simferopol Industrial Substation Hit", summary: "Targeted strike de-energizes railway maintenance yards near the capital.", events: [
+                { type: "strike", title: "Rail Repair Yard Substation Strike", location: "Simferopol North", lat: 44.9700, lng: 34.0800, desc: "Transformer fire reported; local emergency crews extinguish blaze." },
+                { type: "grid", title: "Capital Northern Blackout", location: "Simferopol Outer Ring", lat: 44.9521, lng: 34.1024, desc: "Residential sectors shifted to emergency backup generators." }
+            ]},
+            { day: 23, date: "Oct 23, 2026", title: "Western Crimea Coastal Surveillance", summary: "Continuous UAV surveillance vectors logged tracking Russian naval patrol boats.", events: [
+                { type: "aa", title: "Coastal Gunfire Interceptions", location: "Cape Tarhankut", lat: 45.3450, lng: 32.5200, desc: "Heavy machine guns engage low flying target 5km offshore." }
+            ]},
+            { day: 24, date: "Oct 24, 2026", title: "Eastern Power Trunk Line Disruption", summary: "High-voltage transmission line drops load, causing emergency shutoffs in Kerch.", events: [
+                { type: "grid", title: "Kerch Trunk Line Disconnect", location: "Kerch District", lat: 45.3561, lng: 36.4673, desc: "Load shedding increased to 8 hours per day." }
+            ]},
+            { day: 25, date: "Oct 25, 2026", title: "Post-Blackout Recovery & Municipal Outages", summary: "Following major drone hits on key grid transformers, Krymenergo struggled to restore steady power. Emergency blackouts active across Simferopol, Yalta, and Bakhchysarai.", events: [
+                { type: "grid", title: "Substation Strain & Water Rationing", location: "Simferopol / Bakhchysarai", lat: 44.9521, lng: 34.1024, desc: "Primary circuits de-energized; municipal water networks running strictly on backup emergency generators." },
+                { type: "aa", title: "Naval Base Smoke Screens & Patrols", location: "Sevastopol Roadstead", lat: 44.6166, lng: 33.5254, desc: "Ka-27/Ka-52 helicopter sweeps and active smoke screens deployed to shield naval piers and fuel depots." },
+                { type: "aa", title: "Coastal Drone Interception Bursts", location: "Saky / Chornomorske", lat: 45.1333, lng: 33.6000, desc: "Anti-aircraft firings and heavy machine-gun tracer bursts logged engaging low-altitude UAV vectors." }
+            ]},
+            { day: 26, date: "Oct 26, 2026", title: "Rolling Blackout Mandate Across 4 Cities", summary: "Massive grid strain forces occupation authorities to mandate simultaneous rolling blackouts in Yalta, Kerch, Feodosia, and Yevpatoria with no set restoration timeline.", events: [
+                { type: "grid", title: "Four-City Emergency Blackout Decree", location: "Yalta, Kerch, Feodosia, Yevpatoria", lat: 44.4952, lng: 34.1663, desc: "Strict load-shedding instituted as secondary transformers overheat under redistributed power loads." },
+                { type: "strike", title: "Rail Transit Traction Degradation", location: "Dzhankoi Hub", lat: 45.7090, lng: 34.3930, desc: "Electric traction power uncalibrated; military supply trains forced onto emergency diesel locomotives." },
+                { type: "aa", title: "Kerch Bridge Approach EW Sweeps", location: "Kerch Strait", lat: 45.3561, lng: 36.4673, desc: "Low-altitude security sweeps and electronic warfare (EW) jamming activated around oil piers and bridge approaches." }
+            ]},
+            { day: 27, date: "Oct 27, 2026", title: "Feodosia Substation Incursions & Feeder Hits", summary: "Drone strikes target secondary distribution substations servicing Feodosia and central Crimean rail logistics nodes, triggering new power cuts.", events: [
+                { type: "strike", title: "Feodosia Substation Drone Impact", location: "Feodosia District", lat: 45.0319, lng: 35.3824, desc: "Secondary transformer nodes struck overnight, causing immediate cascading cuts across eastern lines." },
+                { type: "grid", title: "Central District Emergency Load Cuts", location: "Bakhchysarai / Simferopol", lat: 44.7500, lng: 33.8600, desc: "Krymenergo de-energized local loops to prevent high-voltage trunk line short-circuits." },
+                { type: "aa", title: "Harbor Defense & USV Countermeasures", location: "Sevastopol Bay", lat: 44.6300, lng: 33.5300, desc: "Active searchlight sweeps and mobile AA patrols guarding remaining naval assets from drone/USV vectoring." }
+            ]},
+            { day: 28, date: "Oct 28, 2026", title: "Follow-Up Energy Attacks & Rail Security", summary: "Sustained long-range drone strikes on central Crimean electrical nodes compound structural grid damage. Main-line electric rail transport remains stalled.", events: [
+                { type: "strike", title: "Central High-Voltage Transformer Hit", location: "Central Crimea Node", lat: 45.2200, lng: 34.1500, desc: "Follow-up strikes on central junction substations servicing key rail transport lines." },
+                { type: "strike", title: "Dzhankoi Rail Logistics Escort Protocol", location: "Dzhankoi Corridor", lat: 45.7000, lng: 34.4000, desc: "Military freight compositions operating under heavy ZU-23-2 and EW trailer escorts on exposed spans." },
+                { type: "aa", title: "Eastern Approach Surveillance", location: "Kerch Approach", lat: 45.2900, lng: 36.3200, desc: "Persistent helicopter patrols and smoke drills deployed around maritime fuel storage facilities." }
+            ]},
+            { day: 29, date: "Oct 29, 2026", title: "Persistent Grid Strain & Supply Line Defense", summary: "Ongoing drone interdiction against central substations forces strict consumption caps. Rail logistics remain reliant on emergency diesel engines.", events: [
+                { type: "strike", title: "Central Feeder Transformer Interdiction", location: "Simferopol Feeder Sector", lat: 44.9800, lng: 34.0500, desc: "Targeted long-range UAVs strike secondary distribution loops, expanding rural outage zones." },
+                { type: "grid", title: "Emergency Diesel Rail Transit", location: "Dzhankoi–Simferopol–Sevastopol", lat: 45.3000, lng: 34.2000, desc: "Armored supply trains hauling fuel and heavy armor operate strictly under diesel traction." },
+                { type: "aa", title: "Coastal Radar Vector Patrols", location: "Cape Tarhankut / Western Coast", lat: 45.3450, lng: 32.5200, desc: "Anti-aircraft batteries on Tarhankut active overnight guarding western low-altitude radar gaps." }
+            ]},
+            { day: 30, date: "Oct 30, 2026", title: "Nyzhnohirskyi Substation Attack & Outage Shift", summary: "A new wave of drone strikes targets central Crimea's electrical distribution nodes in Nyzhnohirskyi, forcing Krymenergo to reinstate peninsula-wide caps.", events: [
+                { type: "strike", title: "Nyzhnohirskyi Substation Drone Strike", location: "Nyzhnohirskyi Sector", lat: 45.4450, lng: 34.7300, desc: "Direct drone impacts on electrical nodes cause major power loss across central/eastern rural sectors." },
+                { type: "grid", title: "Peninsula-Wide Consumption Restrictions", location: "Crimea-Wide Grid", lat: 45.1000, lng: 34.3000, desc: "Occupation utilities officially reinstate forced power caps to prevent system-wide blackout." },
+                { type: "aa", title: "Western Maritime Patrol Sweeps", location: "Chornomorske / Olenivka", lat: 45.5000, lng: 32.7000, desc: "Low-altitude helicopter sweeps (Ka-27/52) and coastal searchlights deployed against maritime vectors." }
+            ]},
+            { day: 31, date: "Oct 31, 2026", title: "Cumulative Infrastructure Crisis & Rail Escorts", summary: "Continuous targeting of transformer infrastructure forces extended load-shedding shifts. Heavy military escorts required for all rail freight.", events: [
+                { type: "strike", title: "Ongoing Central Substation Interdiction", location: "Central Rail Substation", lat: 45.1500, lng: 34.1000, desc: "Repeat UAV targeting maintains high pressure on surviving transformer nodes." },
+                { type: "grid", title: "Emergency Load-Shedding Expansion", location: "Nyzhnohirskyi & Dzhankoi", lat: 45.6000, lng: 34.5000, desc: "Unscheduled blackouts triggered to balance high-voltage trunk line overload." },
+                { type: "aa", title: "Dzhankoi Escort & Jamming Operations", location: "Dzhankoi Transit Hub", lat: 45.7200, lng: 34.3800, desc: "Freight trains with fuel/armor transit using mobile ZU-23-2 and EW jamming trailers." }
+            ]}
+        ];
+
+        // List of Key Cities & Strategic Locations with Exact Real-World Coordinates
+        const CITIES = [
+            { name: "Sevastopol", lat: 44.6166, lng: 33.5254, color: "#ef4444" },
+            { name: "Simferopol", lat: 44.9521, lng: 34.1024, color: "#3b82f6" },
+            { name: "Dzhankoi", lat: 45.7090, lng: 34.3930, color: "#f59e0b" },
+            { name: "Feodosia", lat: 45.0319, lng: 35.3824, color: "#ef4444" },
+            { name: "Kerch", lat: 45.3561, lng: 36.4673, color: "#3b82f6" },
+            { name: "Yalta", lat: 44.4952, lng: 34.1663, color: "#3b82f6" },
+            { name: "Yevpatoria", lat: 45.1904, lng: 33.3669, color: "#06b6d4" },
+            { name: "Cape Tarhankut", lat: 45.3450, lng: 32.5200, color: "#06b6d4" },
+            { name: "Krasnoperekopsk", lat: 45.9530, lng: 33.7930, color: "#f59e0b" },
+            { name: "Nyzhnohirskyi", lat: 45.4450, lng: 34.7300, color: "#f59e0b" }
+        ];
+
+        // Main State
+        let currentDayIndex = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let map = null;
+        let activeEventsLayer = null;
+
+        // --- INITIALIZATION ---
+        function initMap() {
+            const CRIMEA_BOUNDS = L.latLngBounds([44.36, 32.45], [46.25, 36.72]);
+            const ESRI_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+            // Initialize Leaflet Map
+            map = L.map('map-container', {
+                zoomControl: false,
+                attributionControl: false,
+                zoomSnap: 0.25,
+                zoomDelta: 0.5,
+                minZoom: 5,
+                maxZoom: 18
+            });
+
+            // Add High-Detail Esri Satellite Imagery Layer
+            L.tileLayer(ESRI_URL, {
+                maxNativeZoom: 18,
+                maxZoom: 18,
+                zIndex: 1
+            }).addTo(map);
+
+            // Fit map view tightly around Crimea peninsula
+            map.fitBounds(CRIMEA_BOUNDS, { padding: [15, 15] });
+
+            // Layer group for dynamic operational events
+            activeEventsLayer = L.layerGroup().addTo(map);
+
+            // Add Permanent City Markers & Labels
+            addCityMarkers();
+
+            // Setup UI Controls & Timeline Buttons
+            setupUI();
+
+            // Load Day 1 Operational Data
+            loadDayData(0);
+        }
+
+        function addCityMarkers() {
+            CITIES.forEach(city => {
+                // Leaflet Native Circle Marker for City Pins
+                const marker = L.circleMarker([city.lat, city.lng], {
+                    radius: 5,
+                    color: '#ffffff',
+                    weight: 1.5,
+                    fillColor: city.color,
+                    fillOpacity: 1,
+                    zIndexOffset: 1000
+                }).addTo(map);
+
+                // Permanent Label Tooltip directly attached to marker position
+                marker.bindTooltip(city.name.toUpperCase(), {
+                    permanent: true,
+                    direction: 'right',
+                    offset: [8, 0],
+                    className: 'city-leaflet-label'
+                });
+            });
+        }
+
+        // --- DYNAMIC DATA LOADER FOR TIMELINE DAY ---
+        function loadDayData(dayIndex) {
+            currentDayIndex = dayIndex;
+            const dayData = STRIKE_DATA[dayIndex];
+
+            // Update UI Header Labels
+            document.getElementById('timeline-date-label').textContent = `DAY ${dayData.day}: ${dayData.date.toUpperCase()}`;
+            document.getElementById('drawer-date-title').textContent = dayData.date;
+            document.getElementById('drawer-event-count').textContent = `${dayData.events.length} Events Logged`;
+            // Update Active Day Button Highlight & Scroll into View
+            const buttonsContainer = document.getElementById('day-buttons-container');
+            buttonsContainer.querySelectorAll('button').forEach((btn, idx) => {
+                if (idx === dayIndex) {
+                    btn.className = "flex-shrink-0 py-2 px-3 rounded-lg bg-blue-600 text-white font-mono text-xs font-bold shadow-lg border border-blue-400 text-center transition-all min-w-[70px]";
+                    btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                } else {
+                    btn.className = "flex-shrink-0 py-2 px-3 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 font-mono text-xs border border-slate-700/60 text-center transition-all min-w-[70px]";
+                }
+            });
+
+            // Populate Right Drawer Event Feed
+            const feedList = document.getElementById('event-feed-list');
+            feedList.innerHTML = '';
+
+            dayData.events.forEach(evt => {
+                let badgeClass = "bg-red-950 text-red-300 border-red-800";
+                let iconName = "crosshair";
+                if (evt.type === 'grid') {
+                    badgeClass = "bg-amber-950 text-amber-300 border-amber-800";
+                    iconName = "zap";
+                } else if (evt.type === 'aa') {
+                    badgeClass = "bg-cyan-950 text-cyan-300 border-cyan-800";
+                    iconName = "radio";
+                }
+
+                const evtCard = document.createElement('div');
+                evtCard.className = "p-3 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-blue-500/50 transition-all cursor-pointer group";
+                evtCard.innerHTML = `
+                    <div class="flex items-start justify-between gap-2 mb-1.5">
+                        <span class="text-xs font-bold text-slate-200 group-hover:text-blue-400 transition-colors">
+                            ${evt.title}
+                        </span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono border uppercase flex items-center gap-1 ${badgeClass}">
+                            <i data-lucide="${iconName}" class="w-3 h-3"></i>
+                            ${evt.type}
+                        </span>
+                    </div>
+                    <div class="text-[11px] font-mono text-slate-400 mb-1 flex items-center gap-1">
+                        <i data-lucide="map-pin" class="w-3 h-3 text-slate-500"></i>
+                        ${evt.location}
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        ${evt.desc}
+                    </p>
+                `;
+
+                // Focus Camera on Event Location on Click
+                evtCard.addEventListener('click', () => {
+                    map.flyTo([evt.lat, evt.lng], 10, { duration: 1.2 });
+                });
+
+                feedList.appendChild(evtCard);
+            });
+
+            // Refresh Lucide Icons
+            lucide.createIcons();
+
+            // Render Dynamic Operational Strike & Outage Rings on Map
+            renderDayEventsOnMap(dayData);
+        }
+
+        function renderDayEventsOnMap(dayData) {
+            // Clear previous day's events
+            activeEventsLayer.clearLayers();
+
+            dayData.events.forEach(evt => {
+                let ringColor = "#ef4444"; // Kinetic strike red
+                let fillColor = "#f87171";
+
+                if (evt.type === 'grid') {
+                    ringColor = "#f59e0b"; // Grid blackout amber
+                    fillColor = "#fbbf24";
+                } else if (evt.type === 'aa') {
+                    ringColor = "#06b6d4"; // Air Defense cyan
+                    fillColor = "#22d3ee";
+                }
+
+                // Inner Target Core Point
+                L.circleMarker([evt.lat, evt.lng], {
+                    radius: 7,
+                    color: '#ffffff',
+                    weight: 2,
+                    fillColor: ringColor,
+                    fillOpacity: 0.95
+                }).addTo(activeEventsLayer);
+
+                // Outer Dynamic Radius Ring
+                L.circle([evt.lat, evt.lng], {
+                    radius: evt.type === 'grid' ? 18000 : 12000,
+                    color: ringColor,
+                    weight: 2,
+                    dashArray: evt.type === 'aa' ? '6, 6' : null,
+                    fillColor: fillColor,
+                    fillOpacity: 0.2
+                }).addTo(activeEventsLayer);
+            });
+        }
+
+        // --- UI & PLAYBACK CONTROLS ---
+        function setupUI() {
+            // Generate Timeline Selector Buttons (Days 1 - 31)
+            const dayContainer = document.getElementById('day-buttons-container');
+            dayContainer.innerHTML = '';
+
+            STRIKE_DATA.forEach((data, idx) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.innerHTML = `
+                    <div class="text-[9px] opacity-75">DAY ${data.day}</div>
+                    <div class="font-bold text-xs">${data.date.split(',')[0]}</div>
+                `;
+                btn.addEventListener('click', () => {
+                    pauseAnimation();
+                    loadDayData(idx);
+                });
+                dayContainer.appendChild(btn);
+            });
+
+            // Play / Pause Toggle Listener
+            const playBtn = document.getElementById('btn-play');
+            playBtn.addEventListener('click', () => {
+                if (isPlaying) {
+                    pauseAnimation();
+                } else {
+                    startAnimation();
+                }
+            });
+
+            // Reset Camera Bounds Listener
+            const resetBtn = document.getElementById('btn-reset');
+            resetBtn.addEventListener('click', () => {
+                const CRIMEA_BOUNDS = L.latLngBounds([44.36, 32.45], [46.25, 36.72]);
+                map.flyToBounds(CRIMEA_BOUNDS, { padding: [15, 15], duration: 1.2 });
+            });
+        }
+
+        function startAnimation() {
+            isPlaying = true;
+            document.getElementById('play-icon').setAttribute('data-lucide', 'pause');
+            document.getElementById('play-text').textContent = 'PAUSE LOOP';
+            lucide.createIcons();
+
+            playInterval = setInterval(() => {
+                let nextDay = (currentDayIndex + 1) % STRIKE_DATA.length;
+                loadDayData(nextDay);
+            }, 3500); // 3.5 seconds per frame
+        }
+
+        function pauseAnimation() {
+            isPlaying = false;
+            document.getElementById('play-icon').setAttribute('data-lucide', 'play');
+            document.getElementById('play-text').textContent = 'PLAY ANIMATION';
+            lucide.createIcons();
+
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        }
+
+        // Initialize Map on Window Load
+        window.onload = function() {
+            initMap();
+        };
+    </script>
+</body>
+</html>
